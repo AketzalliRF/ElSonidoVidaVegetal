@@ -1,0 +1,81 @@
+c = "CCC 5.10
+CUC 14.92
+UCC 10.85
+CCU 18.55
+UCU 25.93
+CUU 24.63
+UUC 19.34
+UUU 22.63
+CCA 16.35
+ACC 9.55
+CAC 8.33
+CUA 10.31
+AUC 17.19
+UCA 19.57
+ACU 17.44
+UAC 12.74
+CAU 14.42
+UUA 13.39
+AUU 21.91
+UAU 15.19
+CCG 7.60
+GCC 9.36
+CGC 3.68
+CUG 10.51
+GUC 11.91
+UCG 8.82
+GCU 27.22
+UGC 7.36
+CGU 8.49
+UUG 21.54
+GUU 26.95
+UGU 10.92
+ACA 16.41
+CAA 20.17
+AAC 20.08
+AUA 13.62
+AAU 23.77
+UAA 0.85
+ACG 7.08
+GCA 18.12
+CAG 15.63
+GAC 16.59
+CGA 6.31
+AGC 11.63
+GUA 10.55
+GAU 37.61
+AGU 15.13
+UAG 0.48
+UGA 1.01
+AUG 24.43
+AAA 31.60
+GCG 8.02
+CGG 4.81
+GGC 8.78
+GUG 16.77
+UGG 12.21
+GGU 21.21
+AAG 32.16
+GAA 36.10
+AGA 19.59
+GAG 32.00
+AGG 11.10
+GGA 23.33
+GGG 10.14";
+
+
+
+t = c.split(Char.nl); //convierte mis datos en una lista
+t = t.collect{|x| x.replace("U", "T")};
+u = t.collect{|x| x.split($ )}.flop[0..1];
+
+u[0] = u[0].collect{|x| x.asSymbol};
+u[1] = u[1].collect{|x| x.asSymbol.asFloat};
+e = Dictionary.newFrom(u.flop.flatten);
+e.at(\ACA);
+e.writeArchive("/Users/Aketzalli/Dropbox/Aketzalli/codigo/codon_sesgo.dicc");
+
+
+
+
+
