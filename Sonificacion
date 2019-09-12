@@ -1,0 +1,317 @@
+///LECTURA DE LOS ARCHIVOS DE TEXTO QUE SE VAN A CARGAR///
+(
+~dirRoot = "/Users/Aketzalli/Dropbox/Aketzalli/";
+//~dirRoot = "/Users/hugosg/Dropbox/UNAM/Aketzalli/";
+~dirData = ~dirRoot ++ "data/";
+~dirCodigo = ~dirRoot ++ "codigo/";
+)
+///TERMINA LECTURA DE LOS ARCHIVOS///
+
+(
+
+///INICIA CARGA DE DICCIONARIOS NECESARIOS PARA TRADUCCIÓN ///
+~codonAmino = Object.readArchive(~dirCodigo ++ "codonaminoacido.dicc"); // diccionario de la traducción: Codon - aa
+~sesgos = Object.readArchive(~dirCodigo ++ "codon_sesgo.dicc");  //diccionario del sesgo de codones
+~sesgosTmp = Object.readArchive(~dirCodigo ++ "codon_sesgo.dicc");
+~sesgosC = ~sesgosTmp.values.sort.reverse.collect{arg x;
+	var objeto = ~sesgosTmp.findKeyForValue(x);
+	~sesgosTmp.removeAt(objeto);
+	objeto;
+}; //ordenar de mayor a menor los codones según la aparición
+~sesgosN = ~sesgos.values.reverse.sort.collect{arg x; x}.normalizeSum; //ordenado de mayor a menor
+~ocurrencias = Object.readArchive(~dirCodigo ++ "aa_ocurrencia.dicc"); // diccionario de las ocurrencia de aminoacidos de las prot
+///TERMINA CARGA DE DICCIONARIOS NECESARIOS PARA TRADUCCIÓN ////////
+
+~genesCompletos = Dictionary(); //los genes completos se refiere a los genes con regiones codificadoras y reguladoras
+~genesCDS = Dictionary(); //genes con la región codificadora
+~cromosomas = []; //los 5 cromosomas de Arabidopsis thaliana
+
+~leerGenesCompletos = {
+	var carpeta = ~dirData ++ "GenesCompletos/";
+	carpeta.postln;
+	(carpeta ++ "*.txt").pathMatch.do{arg archivo;
+		var file, name, contenido;
+		name = archivo.split($/).last.split($.)[0].postln;
+		file = FileReader.read(archivo);
+		contenido = file[1..].flat;
+		~genesCompletos.put(name.toUpper.asSymbol, Dictionary().put(\bases, contenido))
+	};
+}.value;
+
+~leerGenesCDS = {
+	var carpeta = ~dirData ++ "GenesCDS/";
+	carpeta.postln;
+	(carpeta ++ "*.txt").pathMatch.do{arg archivo;
+		var file, name, contenido;
+		name = archivo.split($/).last.split($.)[0].postln;
+		file = FileReader.read(archivo);
+		contenido = file[1..].flat;
+		~genesCDS.put(name.toUpper.asSymbol, Dictionary().put(\bases, contenido))
+	};
+}.value;
+ ///Codones///
+~generarCodones = {
+	~genesCDS.do{arg item;
+		item.at(\bases).clump(3);
+		item.put(\codones, item.at(\bases).clump(3).collect{arg each;
+			(each[0] ++ each[1] ++ each[2]).asSymbol;
+		});
+	};
+}.value;
+
+///Sesgo del codon///
+~generarSesgo = {
+	~genesCDS.do{arg item;
+		item.at(\codones);
+		item.put(\sesgo, item.at(\codones).collect{arg x;
+			~sesgos.at(x.asSymbol);
+		});
+	};
+}.value;
+
+///Traducción del codigo genetico///
+~generarAminoacidos = {
+	~genesCDS.do{arg item;
+		item.at(\codones).postln;
+		item.put(\aminoacidos, item.at(\codones).collect{arg x;
+			~codonAmino.at(x.asSymbol);
+		});
+	};
+}.value;
+
+///Ocurrencias de los aminoacidos en las prteinas////
+~generarOcurrencias = {
+	~genesCDS.do{arg item;
+		item.at(\aminoacidos);
+		item.put(\ocurrencias, item.at(\aminoacidos).collect{arg x;
+			~ocurrencias.at(x.asSymbol);
+		});
+	};
+}.value;
+
+///Cromosomas///
+~leerCromosomas = {
+	var carpeta = ~dirData ++ "genoma/";
+	carpeta.postln;
+	5.do{arg crom;
+		var file;
+		file = FileReader.read(carpeta ++ (crom + 1) ++ ".txt").flat;
+		file.postln;
+		~cromosomas = ~cromosomas.add(file);
+	}
+}.value;
+)
+
+///INICIO EJEMPLOS DE USO ///
+~codonesDia = ~genesCDS.at(\FLC).at(\bases)
+~codonesDia = ~genesCDS.at(\FLC).at(\codones)
+~codonesDia = ~genesCDS.at(\FLC).at(\sesgo)
+~codonesDia = ~genesCDS.at(\FLC).at(\aminoacidos)
+
+~codonesDia = ~genesCDS.at(\FLC).at(\ocurrencias)//No se ocupo
+
+///FINAL EJEMPLOS DE USO ////////
+
+///INICIO SONIFICACION DE GENOMA COMPLETO///
+
+(
+SynthDef(\basenitro, {arg freq,bati, vol, pan=1, dur;
+	var signal, env;
+	env  = EnvGen.kr(Env.sine(dur), doneAction: 2);
+	signal = SinOsc.ar([freq,freq+bati]).sum;
+	Out.ar(0, Pan2.ar(signal * vol, pan, env));
+}).add;
+)
+
+//5 cromosomas en A. thaliana
+s.scope
+s.prepareForRecord
+s.record
+s.stopRecording
+(
+a=Ppar([
+	Pbind(
+	\instrument, \basenitro,
+	\bases, Pseq(~cromosomas[0], inf), //Cromosoma 1
+	\dur, Pfunc{|ev| switch(ev[\bases],$A,{1},$G,{6},$T,{4},$C,{2},$N,{1},{1})}, //posición del C=O que forma puente de hidrógeno
+	\delta, Pfunc{|ev| switch(ev[\bases],$G,{2},$C,{1},$T,{1},$A,{2},$N,{1},{1})}, //la cantidad de anillos de la estructura química
+	\pan, Pfunc{|ev| switch(ev[\bases],$A,{1},$G,{0.5},$T,{-0.5},$C,{-1},$N,{0},{0})}, //aun no esta determinado con iformación bioquímica
+	\vol, Pfunc{|ev| switch(ev[\bases],$A,{0.2},$G,{0.3},$T,{0.2},$C,{0.3},$N,{0.01},{0.01}) * 0.09}, //cuantos puentes de hidrógeno forman
+	\freq, Pfunc{|ev| switch(ev[\bases],$A,{[1,6]},$G,{[1,2]},$T,{3},$C,{[3,4]},$N,{0},{0})*60}, //posición de los N que forman los puente de hidrógeno
+	\bati, Pfunc{|ev| switch(ev[\bases],$A,{([1,6]).choose},$G,{([1,2,6]).choose},$T,{([3,4]).choose},$C,{([2,3,4]).choose},$N,{0},{0})}, //posición de todos los puentes de hidrógeno
+),
+	Pbind(
+	\instrument, \basenitro,
+	\bases, Pseq(~cromosomas[1], inf),
+	\dur, Pfunc{|ev| switch(ev[\bases],$A,{1},$G,{6},$T,{4},$C,{2},$N,{1},{1})},
+	\delta, Pfunc{|ev| switch(ev[\bases],$G,{2},$C,{1},$T,{1},$A,{2},$N,{1},{1})},
+	\pan, Pfunc{|ev| switch(ev[\bases],$A,{1},$G,{0.5},$T,{-0.5},$C,{-1},$N,{0},{0})},
+	\vol, Pfunc{|ev| switch(ev[\bases],$A,{0.2},$G,{0.3},$T,{0.2},$C,{0.3},$N,{0.01},{0.01}) * 0.09},
+	\freq, Pfunc{|ev| switch(ev[\bases],$A,{[1,6]},$G,{[1,2]},$T,{3},$C,{[3,4]},$N,{0},{0})*70},
+	\bati, Pfunc{|ev| switch(ev[\bases],$A,{([1,6]).choose},$G,{([1,2,6]).choose},$T,{([3,4]).choose},$C,{([2,3,4]).choose},$N,{0},{0})},
+),
+	Pbind(
+	\instrument, \basenitro,
+	\bases, Pseq(~cromosomas[2], inf),
+	\dur, Pfunc{|ev| switch(ev[\bases],$A,{1},$G,{6},$T,{4},$C,{2},$N,{1},{1})},
+	\delta, Pfunc{|ev| switch(ev[\bases],$G,{2},$C,{1},$T,{1},$A,{2},$N,{1},{1})},
+	\pan, Pfunc{|ev| switch(ev[\bases],$A,{1},$G,{0.5},$T,{-0.5},$C,{-1},$N,{0},{0})},
+	\vol, Pfunc{|ev| switch(ev[\bases],$A,{0.2},$G,{0.3},$T,{0.2},$C,{0.3},$N,{0.01},{0.01}) * 0.09},
+	\freq, Pfunc{|ev| switch(ev[\bases],$A,{[1,6]},$G,{[1,2]},$T,{3},$C,{[3,4]},$N,{0},{0})*80},
+	\bati, Pfunc{|ev| switch(ev[\bases],$A,{([1,6]).choose},$G,{([1,2,6]).choose},$T,{([3,4]).choose},$C,{([2,3,4]).choose},$N,{0},{0})},
+),
+	Pbind(
+	\instrument, \basenitro,
+	\bases, Pseq(~cromosomas[3], inf),
+	\dur, Pfunc{|ev| switch(ev[\bases],$A,{1},$G,{6},$T,{4},$C,{2},$N,{1},{1})},
+	\delta, Pfunc{|ev| switch(ev[\bases],$G,{2},$C,{1},$T,{1},$A,{2},$N,{1},{1})},
+	\pan, Pfunc{|ev| switch(ev[\bases],$A,{1},$G,{0.5},$T,{-0.5},$C,{-1},$N,{0},{0})},
+	\vol, Pfunc{|ev| switch(ev[\bases],$A,{0.2},$G,{0.3},$T,{0.2},$C,{0.3},$N,{0.01},{0.01}) * 0.09},
+	\freq, Pfunc{|ev| switch(ev[\bases],$A,{[1,6]},$G,{[1,2]},$T,{3},$C,{[3,4]},$N,{0},{0})*90},
+	\bati, Pfunc{|ev| switch(ev[\bases],$A,{([1,6]).choose},$G,{([1,2,6]).choose},$T,{([3,4]).choose},$C,{([2,3,4]).choose},$N,{0},{0})},
+),
+	Pbind(
+	\instrument, \basenitro,
+	\bases, Pseq(~cromosomas[4], inf),
+	\dur, Pfunc{|ev| switch(ev[\bases],$A,{1},$G,{6},$T,{4},$C,{2},$N,{1},{1})},
+	\delta, Pfunc{|ev| switch(ev[\bases],$G,{2},$C,{1},$T,{1},$A,{2},$N,{1},{1})},
+	\pan, Pfunc{|ev| switch(ev[\bases],$A,{1},$G,{0.5},$T,{-0.5},$C,{-1},$N,{0},{0})},
+	\vol, Pfunc{|ev| switch(ev[\bases],$A,{0.2},$G,{0.3},$T,{0.2},$C,{0.3},$N,{0.01},{0.01}) * 0.09},
+	\freq, Pfunc{|ev| switch(ev[\bases],$A,{[1,6]},$G,{[1,2]},$T,{3},$C,{[3,4]},$N,{0},{0})*100},
+	\bati, Pfunc{|ev| switch(ev[\bases],$A,{([1,6]).choose},$G,{([1,2,6]).choose},$T,{([3,4]).choose},$C,{([2,3,4]).choose},$N,{0},{0})},
+),
+],inf).play
+)
+///FINAL SONIFICACION DE GENOMA COMPLETO///
+
+
+//////INICIO SONIFICACIÓN POR ESTADIOS////
+(
+SynthDef(\basenitroyamino, {arg freq,bati,vol,attack,decay,sustain,release, pan=1;
+	var signal, env;
+	env  = EnvGen.kr(Env([0,1,0.5,0.5,0],[attack,decay,sustain,release]), doneAction: 2);
+	signal = SinOsc.ar([freq,freq+bati]).sum;
+	Out.ar(0, Pan2.ar(signal * vol, pan, env));
+}).add;
+)
+(
+~dp = Dictionary.newFrom([
+	"G",[1],
+	"A",[14],
+	"V",[5,[16,14]],
+	"L",[11,5,[16,14]],
+	"I",[[16,2,1],11,14],
+	"P",[11,11,13,12],
+	"F",[11,18],
+	"Y",[11,18,6],
+	"W",[11,20],
+	"M",[11,11,3,14],
+	"C",[11,8],
+	"S",[11,6],
+	"T",[[1,2,6],14],
+	"H",[11,19],
+	"K",[11,11,11,11,15],
+	"R",[11,11,11,7,2,[12,10]],
+	"D",[11,9],
+	"E",[11,11,9],
+	"N",[11,2,[12,4]],
+	"Q",[11,11,2,[12,4]],
+	"STOP",[]
+]
+);
+)
+
+(
+~codoninfo = Dictionary.newFrom([
+	"A", [0.5,1,[1,6,0,2]], //delta, paneo, envolvente
+	"G", [1,0.5, [1,2,6,2]],
+	"T", [1.5,-0.5, [3,4,0,1]],
+	"C", [2,-1, [1,3,4,1]],
+]);
+)
+
+(
+~genTocador = { arg gen, mainVol, genIndx;
+	var occurrenciasNor, aminoacidosNor, paneos, envolventeA, envolventeS, envolventeD, envolventeR, sesgocod, deltaCod1;
+	occurrenciasNor = [];
+	paneos = [];
+	envolventeA = [];
+	envolventeS = [];
+	envolventeR = [];
+	envolventeD = [];
+
+	sesgocod = [];
+	deltaCod1 = [];
+
+	aminoacidosNor = ~genesCDS.at(gen).at(\aminoacidos).collect{|o, i|
+		var amount = ~dp.at(o).size;
+		amount.do{occurrenciasNor = occurrenciasNor.add(~genesCDS.at(gen).at(\ocurrencias)[i] / amount)};
+		amount.do{paneos = paneos.add(~codoninfo.at(~genesCDS.at(gen).at(\codones)[i].asString[1].asString)[1])};
+		amount.do{envolventeA = envolventeA.add(~codoninfo.at(~genesCDS.at(gen).at(\codones)[i].asString[2].asString)[2][0])};
+		amount.do{envolventeD = envolventeD.add(~codoninfo.at(~genesCDS.at(gen).at(\codones)[i].asString[2].asString)[2][1])};
+		amount.do{envolventeS = envolventeS.add(~codoninfo.at(~genesCDS.at(gen).at(\codones)[i].asString[2].asString)[2][2])};
+		amount.do{envolventeR = envolventeR.add(~codoninfo.at(~genesCDS.at(gen).at(\codones)[i].asString[2].asString)[2][3])};
+		amount.do{deltaCod1 = deltaCod1.add(~codoninfo.at(~genesCDS.at(gen).at(\codones)[i].asString[0].asString)[0])};
+		amount.do{sesgocod = sesgocod.add(~genesCDS.at(gen).at(\sesgo)[i])};
+		~dp.at(o);
+	};
+	aminoacidosNor = aminoacidosNor.flatten;
+
+	//aminoacidosNor.postln;
+	//occurrenciasNor.size.postln;
+	//paneos.size.postln;
+	//envolventeA.postln;
+	//envolventeD.postln;
+	//envolventeS.postln;
+	//envolventeR.postln;
+	//sesgocod.postln;
+	//deltaCod1.postln;
+
+	Pbind(	//freq,bati,vol,attack,decay,sustain,release, pan=1;
+
+		\instrument, \basenitroyamino,
+		\freq, Pseq(aminoacidosNor + ((genIndx+1)*5) * 25,1).trace, //cadena lateral de los aminoacidos ((4 + genIndx)) Si quieres camios en estadio
+		//\dur, Pseq(occurrenciasNor * 0.1,inf), //es determinada por la ocurrencia del aminoácido
+		\bati, Pseq(sesgocod *0.2 ,1), //el sesgo del codón define los batimentos
+		\pan, Pseq(paneos,inf), //definido por la segunda BN que conforma al codón
+		\attack, Pseq(envolventeA/2,1), //Definida por la tercer base que conforma el codón, y la posición en la primer posición en donde se forma el puente de hidrógeno
+		\decay, Pseq(envolventeD/2,1), //Definida por la tercer base que conforma el codón y la segunda posición en donde se forman los puentes de hrdrógeno, T y A no poseen decay
+		\sustain, Pseq(envolventeS/2,1), //Definida por la tercer base que conforma el codón y la segun o tercera posición del puente de hidrógeno (dependiendo de la base, si es pirimidina o purina)
+		\release, Pseq(envolventeR/2,1), //Definida por la tercer base que conforma el codón y los anillos que forma es estructura química de la base
+		\delta, Pseq(deltaCod1,1 ), //definido por la primer base que conforma al codón
+		\vol,mainVol*0.2,
+	).play;
+};
+
+)
+
+
+2/3
+//Genes MADS en el ciclo de vida de Arabidopsis thaliana
+(
+~ciclo = [
+	[\FLC], //germinación 0
+	[\AGL16,\XAL1], //etapa vegetativa 1
+	[\SHP1, \SHP2, \STK, \XAL1, \AGL16, \AGL44, \AGL6, \FLC, \AGL42, \SOC1 ], //crecimiento 2
+	[\CAL1, \AGL24, \SVP, \XAL1, \AGL15, \AGL18, \AGL17, \AGL6, \FLC, \MAF1, \MAF2, \MAF3, \MAF4, \MAF5, \AGL19, \AGL42, \AGL71, \AGL72, \SOC1, \AP1, \AGL18], //transición floral 3
+	[\AGL65, \AG, \SHP1, \SHP2, \STK, \AGL15, \AP3, \PI, \FLC, \SEP1, \SEP2, \SEP3, \SEP4, \FUL, \AP1], //floración 4
+	[\AGL65, \SHP1, \SHP2, \STK, \AGL23, \AGL104, \AGL66, \FLC, \DIA, \AGL62, \AGL80], //gametogénesis 5
+	[\SHP1, \SHP2, \AGL15, \TT16, \GOA, \FUL, \DIA, \AGL80, \PHE1] //fructificación 6
+];
+)
+//Fin de Genes MADS en el ciclo de vida de Arabidopsis thaliana
+(
+~tocaEstadio = { arg genIndx;
+	~ciclo[genIndx].do{arg gen;
+		var mainVol = 0.08 / ~ciclo[genIndx].size;
+		~genTocador.value(gen,mainVol, genIndx);
+	}
+};
+)
+~tocaEstadio.value(4);
+s.scope
+s.prepareForRecord
+s.record
+s.stopRecording
+
+//////FIN DE SONIFICACIÓN POR ESTADIOS
